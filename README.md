@@ -1,4 +1,5 @@
-httpgzip
-========
+# httpgzip
 
-gzip + net/http middleware for Go
+Go middleware to gzip net/http responses.
+
+© 2014 nb.io, LLC
