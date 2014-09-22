@@ -10,15 +10,10 @@ import (
 )
 
 func TestGzipResponse(t *testing.T) {
-	h := GzipResponse(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("hello"))
-	}))
-	http.Handle("/", h)
-	s := httptest.NewServer(nil)
-	defer s.Close()
+	server := createServer()
+	defer server.Close()
 
-	req, err := http.NewRequest("GET", s.URL, nil)
+	req, err := http.NewRequest("GET", server.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +25,11 @@ func TestGzipResponse(t *testing.T) {
 	defer resp.Body.Close()
 
 	if resp.Header.Get("Content-Encoding") != "gzip" {
-		t.Errorf("expected gzip response, got headers: %v", resp.Header)
+		t.Errorf("expected gzip response; got headers: %v", resp.Header)
+	}
+
+	if resp.Header.Get("Vary") != "Accept-Encoding" {
+		t.Errorf("expected Vary: Accept-Encoding; got headers: %v", resp.Header)
 	}
 
 	var message bytes.Buffer
@@ -42,4 +41,43 @@ func TestGzipResponse(t *testing.T) {
 	if message.String() != "hello" {
 		t.Fatal("expected 'hello' to roundtrip, got: %q", message.String())
 	}
+}
+
+func TestNonGzipResponse(t *testing.T) {
+	server := createServer()
+	defer server.Close()
+
+	req, err := http.NewRequest("GET", server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		t.Errorf("unexpected gzip response; headers: %v", resp.Header)
+	}
+
+	if resp.Header.Get("Vary") != "Accept-Encoding" {
+		t.Errorf("expected Vary: Accept-Encoding; got headers: %v", resp.Header)
+	}
+
+	var message bytes.Buffer
+	io.Copy(&message, resp.Body)
+	if message.String() != "hello" {
+		t.Fatal("expected 'hello' to roundtrip, got: %q", message.String())
+	}
+}
+
+func createServer() *httptest.Server {
+	h := GzipResponse(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("hello"))
+	}))
+	mux := http.NewServeMux()
+	mux.Handle("/", h)
+	return httptest.NewServer(mux)
 }
